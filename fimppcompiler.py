@@ -1,0 +1,280 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os.path
+import re
+
+class FiMppCompiler():
+    # __init__
+    # We set there the file where magic will be applied
+    def __init__(self, file):
+        # Does the file exist?
+        if os.path.exists(file):
+            self.__file = file
+            handler = open(file, 'r')
+            self.__lines = handler.readlines()
+            handler.close()
+            self.compile()
+        # No, so you're not a pony!
+        else:
+            raise Exception("Invalid file!")
+            
+    # compile
+    # This turns your beautiful pony letter into python runnable code using some awesome magic
+    # Seriously, it uses magic. The magic of python        
+    def compile(self):
+        # Those flags are used to remember the user how to correctly write a letter without missing any part
+        self.__compileFlags = {"hasMain" : False, "hasEnd" : False}
+        # That's like a spells book for python to do its magic
+        self.__compileDirs = {"level" : 0, "inFunc" : False, "inClass" : False}
+
+        compiled_file = open(self.get_compiled_file_name(), 'w')
+        # Those lines are very, very important. They're so important that you could ommit them
+        compiled_lines = ["#!/usr/bin/env python", "# -*- coding: utf-8 -*-"]
+        linenum = 0
+        # We'll go through the jungle... I mean, the lines of your letter
+        for line in self.__lines:
+            linenum += 1
+            # Hey, you, compile my line, for the love of ponies!
+            line_compiled = self.compile_line(line, linenum)
+            # We're appending the line just if it's not empty
+            if (line_compiled != ""):
+                compiled_lines.append(line_compiled)
+        if self.__compileFlags['hasMain'] != True:
+            raise Exception("A pony letter must have \"Today I learned\"!")
+        if self.__compileFlags['hasEnd'] != True:
+            raise Exception("You must end your letters with \"Your faithful student, Your Name\"!")
+        # Huh, translated python code will be written using some more magic
+        compiled_file.writelines(["%s\n" % line for line in compiled_lines])
+        compiled_file.close()
+    
+    # get_compiled_file_name
+    # You'll need to write the compiled code somewhere, that place is yourfile_c.py
+    # Returns the name of the compiled file we're going to write       
+    def get_compiled_file_name(self):
+        file = self.__file.replace(".pony", "_c.py")
+        # We don't want paths at the moment, just files
+        if "/" in file:
+            # There's a slash, ponies don't like slashes
+            raise Exception("Use cd to navigate to the folder where the file is located and then run the compiler.")
+        # If the compiled hasn't been compiled yet, let's create a new shiny empty file
+        if not os.path.exists(file):
+            # Some magic happens here and a new file appears on your computer
+            f = open(file, 'w')
+            f.close()
+        return file
+    
+    # tabcont
+    # Prints a number of tabs depending on the depth level number    
+    def tabcont(self):
+        return "".join(["\t" for i in range(0, self.__compileDirs["level"])])
+     
+    # addtab
+    # Adds a tab level   
+    def addtab(self):
+        self.__compileDirs["level"] += 1
+    
+    # rtab
+    # Shortcut for removetab
+    # Removes a tab level
+    def rtab(self):
+        self.__compileDirs["level"] -= 1
+     
+    # compile_line
+    # We're going to compile the line
+    # It's like a monkey coded this, but It's just a just for the lulz compiler
+    # Let's go ponies!   
+    def compile_line(self, line, linenum):
+        # Logical operators
+        signs = {"had more than" : '>', "was like" : '==', "had less than" : '<', "had the same or more than" : '>=', "had the same or less than" : '<=', "was not like" : '!='}
+        
+        # Compiles the main function
+        # Today I learned
+        # => if __name__ == '__main__':
+        if "Today I learned" in line:
+            self.__compileFlags['hasMain'] = True
+            if self.__compileDirs["level"] >= 0:
+                self.addtab()
+            else:
+                raise Exception("Indentation error in line %d" % linenum)
+            return "if __name__ == '__main__':"
+        
+        # Compiles a comment
+        # P.S. My comment
+        # => #My Comment   
+        if "P.S. " in line:
+            return self.tabcont() + line.replace("P.S. ", '')
+        
+        # Compiles the end of a block
+        # That's what I did.
+        # => 
+        # It doesn't return anything but reduces the tab level and raises an error if the tab level is not bigger than 0
+        if "That's what I did." in line:
+            if self.__compileDirs["level"] > 0:
+                self.rtab()
+            else:
+                raise Exception("Unexpected end in line %d" % linenum)
+            return ""
+        
+        # Compiles a pass
+        # I did nothing.
+        # => pass
+        if "I did nothing." in line:
+            return "%spass" % self.tabcont()
+        
+        # Just the end of the main function
+        # Your faithful student, Twilight Sparkle.
+        # => 
+        # It does nothing, but you should say goodbye if you don't want to get an error!  
+        if "Your faithful student, " in line:
+            self.__compileFlags["hasEnd"] = True
+            return ""
+        
+        # Compile assign syntax
+        # Did you know that var is "cool"?
+        # => var = "cool"    
+        match = re.search(r'Did you know that (.*) is (.*)\?', line)
+        if match:
+            return "%s%s = %s" % (self.tabcont(), match.group(1), match.group(2))
+        
+        match = re.search(r'I did this ([0-9]+) times!', line)
+        if match:
+            self.addtab()
+            return "%sfor i in range(0, %d)" % (self.tabcont(), match.group(1))
+            
+        # Compiles variable incrementation/decrementation
+        # VarName got/had <num> more/less
+        # => VarName -/+= <num>
+        match = re.search(r'(.*) (got|had) \d (more|less)', line)    
+        if match:
+            sign = "+" if match.group(4) == 'more' else '-'
+            return "%s%s %s= %d" % (self.tabcont(), match.group(1), sign, match.group(3))
+        
+        # Compiles a function with arguments
+        # That's about FunctionName with Arg1, Arg2!
+        # => def FunctionName(Arg1, Arg2):   
+        match = re.search(r'That\'s about (.*) with (.*)!', line)
+        if match:
+            args = match.group(2).split(' and ')
+            self.addtab()
+            return "%sdef %s(%s):" % (self.tabcont(), match.group(1), ", ".join(args))
+            
+        # Compiles a function with no arguments
+        # That's about FunctionName!
+        # => def FunctionName():   
+        match = re.search(r'That\'s about (.*)!', line)
+        if match:
+            self.addtab()
+            return "%sdef %s():" % (self.tabcont(), match.group(1))
+        
+        # Compiles the basic print function with just a string argument
+        # I sang/wrote/said "string"
+        # => print "string"
+        # I sang/wrote/said "string with ''var''"
+        # => print "string with %s" % var 
+        match = re.search(r'I (sang|wrote|said) "(.*)"', line)   
+        if match:
+            printable = match.group(2)
+            match = re.findall(r'\'\'([a-zA-Z0-9_]+)\'\'', printable)
+            if match:
+                if len(match) == 1:
+                    subs = " % "
+                else:
+                    subs = " % ("
+                for i in match:
+                    printable = printable.replace("''%s''" % i, "%s")
+                    subs += i + ','
+                if subs.endswith(","): 
+                    subs = subs[:-1]
+                if len(match) > 1:
+                    subs += ")"
+                return ('%sprint "%s"' % (self.tabcont(), printable)) + subs
+                            
+            return '%sprint "%s"' % (self.tabcont(), printable) 
+        
+        # We are asigning and casting
+        # Did you know that Pinkie likes (int) 4?
+        # => Pinkie = (int) 4    
+        match = re.search(r'Did you know that (.*) (is|likes) \((.*)\) (.*)\?', line) 
+        if match:
+            return "%s%s = (%s) %s" % (self.tabcont, match.group(1), match.group(3), match.group(4))    
+        
+        # Function call
+        # I learned about ducks
+        # => ducks()
+        # I learned about ducks with "my mum" and 3
+        # => ducks("my mum", 3)
+        # I learned about ducks with "my mum" and 3 then I told var
+        # => var = ducks("my mum", 3)
+        match = re.search(r'I learned about (.*)(| with (.*))(| then I told (.*))', line)
+        if match:
+            assign = ""
+            args = ""
+            try:
+                if not "with" in match.group(2):
+                    assign = match.group(3)
+                else:    
+                    args = match.group(3)
+                    try:
+                        assign = match.group(5)
+                    except:
+                        pass
+            except:
+                pass
+            if args != "":
+                args = ",".join(args.split(' and '))
+            if assign == "":
+                return "%s%s(%s)" % (self.tabcont(), match.group(1), args)
+            else:
+                return "%s%s = %s(%s)" % (self.tabcont(), assign, match.group(1), args)
+        
+        # Compiles the if/while sentence
+        # When var was like 3
+        # => if var == 3:
+        # When var was like 'this'
+        # => if var == 'this':
+        # I did this while var had less than 3
+        # => while var < 3:
+        match = re.search(r'(When|I did this while) ([a-zA-Z0-9_]+) (had more than|was like|had less than|had the same or more than|had the same or less than|was not like) (.*)', line)
+        if match:
+            tabs = self.tabcont()
+            self.addtab()
+            structure = "if" if match.group(1) == 'When' else "while"
+            value = match.group(4)
+            return "%s%s %s %s %s:" % (tabs, structure, match.group(2), signs[match.group(3)], value)
+
+        # Try/catch/finally block
+        if 'I did it keeping a close eye out.' in line:
+            self.addtab()
+            return "%stry:" % self.tabcont()
+        if 'It didn\'t work, but I knew why.' in line:
+            self.rtab()
+            tabs = self.tabcont()
+            self.addtab()
+            return "%scatch:" % tabs
+        if 'In the end, I did this instead.' in line:
+            self.rtab()
+            tabs = self.tabcont()
+            self.addtab()
+            return "%sfinally:" % tabs
+            
+        # Else
+        if 'I tried something else.' in line:
+            self.rtab()
+            tabs = self.tabcont()
+            self.addtab()
+            return "%selse:" % tabs
+        
+        # Throw an exception
+        # Surprisingly, something went wrong!
+        # => raise Exception
+        # Surprisingly, something went wrong and I said "That's not allowed"!
+        # => raise Exception("That's not allowed")
+        match = re.search(r'Surprisingly, something went wrong and I said \"(.*)\"!', line)
+        if match:
+            return "%sraise Exception(\"%s\")" % (self.tabcont(), match.group(1))
+        if "Surprisingly, something went wrong!" in line:
+            return "%sraise Exception" % self.tabcont()
+            
+        # Nothing to compile in this line, so we're not returning anything    
+        return ""
