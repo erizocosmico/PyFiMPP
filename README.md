@@ -27,3 +27,8 @@ Tests folder
 ============
 
 Tests folder include a portable file with the FiMppCompiler class, a test.py file if you want to try it out without using the command line tool and main.pony, a FiM++ example file.
+
+FiM++ syntax
+============
+
+I've not documented yet the FiM++ syntax I used for my implementation. I still have to work on that.
